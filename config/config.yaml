@@ -1,0 +1,148 @@
+project:
+  name: "Customer Behavior Prediction Platform"
+  client: "Vantara Retail Solutions"
+  version: "1.0.0"
+  seed: 42
+
+paths:
+  raw_data: "data/raw/online_retail_II.xlsx"
+  interim_dir: "data/interim"
+  processed_dir: "data/processed"
+  interim_transactions: "data/interim/transactions_clean.parquet"
+  customer_features: "data/processed/customer_features.parquet"
+  artifacts_dir: "models_artifacts"
+  logs_dir: "logs"
+  run_log: "logs/model_runs.csv"
+
+data:
+  sheet_names: ["Year 2009-2010", "Year 2010-2011"]
+  column_map:
+    Invoice: "invoice"
+    StockCode: "stock_code"
+    Description: "description"
+    Quantity: "quantity"
+    InvoiceDate: "invoice_date"
+    Price: "unit_price"
+    "Customer ID": "customer_id"
+    Country: "country"
+  expected_date_range: ["2009-12-01", "2011-12-09"]
+  max_null_rate:
+    customer_id: 0.30
+    description: 0.02
+  non_product_codes: ["POST", "D", "M", "BANK CHARGES", "PADS", "DOT", "CRUK", "C2", "S", "B", "AMAZONFEE"]
+  outlier:
+    iqr_multiplier: 3.0
+    quantity_bulk_threshold: 1000
+
+features:
+  # Features use only data strictly BEFORE cutoff_date (no leakage).
+  cutoff_date: "2011-09-09"
+  churn_horizon_days: 90        # churn = no purchase in the 90 days after the cutoff
+  seasonal_months: [10, 11, 12]
+  min_orders_for_model: 1
+
+training:
+  test_size: 0.15
+  val_size: 0.15
+  cv_folds: 5
+  search_iterations: 20
+  imbalance:
+    method: "class_weight"      # class_weight or smote (applied to training data only)
+  targets:
+    roc_auc: 0.80
+    recall: 0.70
+    clv_r2: 0.60
+
+models:
+  logistic_regression:
+    C: 1.0
+    max_iter: 1000
+    penalty: "l2"
+  decision_tree:
+    max_depth: 5
+    min_samples_leaf: 20
+  random_forest:
+    n_estimators: [200, 400]
+    max_depth: [6, 10, null]
+    min_samples_leaf: [1, 5, 10]
+  xgboost:
+    n_estimators: 500
+    learning_rate: [0.03, 0.05, 0.1]
+    max_depth: [3, 5, 7]
+    subsample: [0.7, 0.9]
+    colsample_bytree: [0.7, 0.9]
+    early_stopping_rounds: 30
+  lightgbm:
+    n_estimators: 500
+    learning_rate: [0.03, 0.05, 0.1]
+    num_leaves: [15, 31, 63]
+  knn:
+    n_neighbors: 15
+  svm:
+    C: 1.0
+    kernel: "rbf"
+  use_svm_instead_of_knn: false
+
+deep_learning:
+  ann:
+    hidden_units: [64, 32]
+    dropout: 0.3
+    learning_rate: 0.001
+    weight_decay: 0.0001
+    batch_size: 64
+    max_epochs: 200
+    patience: 15
+  lstm:
+    max_sequence_length: 20
+    hidden_size: 32
+    num_layers: 1
+    dropout: 0.2
+    learning_rate: 0.001
+    batch_size: 64
+    max_epochs: 100
+    patience: 10
+  autoencoder:
+    encoding_dim: 4
+    hidden_units: [16, 8]
+    learning_rate: 0.001
+    max_epochs: 150
+    patience: 15
+    threshold_percentile: 95
+
+segmentation:
+  kmeans:
+    k_range: [2, 10]
+  second_algorithm: "gmm"       # gmm or dbscan
+  gmm:
+    max_components: 8
+  dbscan:
+    eps: 0.8
+    min_samples: 10
+  hierarchical_sample_size: 500
+
+explainability:
+  shap_background_size: 100
+  lime_num_features: 8
+  pdp_features: ["recency_days", "frequency"]
+
+api:
+  title: "Customer Behavior Prediction API"
+  host: "0.0.0.0"
+  port: 8000
+  model_name: "xgboost"
+  risk_thresholds:
+    low: 0.33
+    high: 0.66
+
+database:
+  # Secrets come from the .env file, never from this file.
+  url_env_var: "DATABASE_URL"
+  tables: ["customers", "transactions", "predictions", "segments"]
+
+dashboard:
+  title: "Vantara Retail Solutions: Customer Insights"
+  api_base_url_env_var: "API_BASE_URL"
+  page_size: 25
+
+logging:
+  level: "INFO"
