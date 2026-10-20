@@ -90,6 +90,7 @@ class FakeService:
 @pytest.fixture()
 def client(monkeypatch):
     monkeypatch.setattr("api.main.PredictionService", FakeService)
+    monkeypatch.setattr("api.main.Portfolio", lambda service: object())  # not needed by these tests
     with TestClient(create_app()) as test_client:
         yield test_client
 

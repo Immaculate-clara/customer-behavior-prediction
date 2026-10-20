@@ -11,7 +11,8 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from api.routers import customers, explain, health, predict
+from api.portfolio import Portfolio
+from api.routers import customers, explain, health, portfolio, predict
 from api.services import CustomerNotFound, InvalidFeatures, PredictionService
 from src.utils.config import get_config_value
 from src.utils.logger import get_logger
@@ -21,8 +22,9 @@ logger = get_logger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Load every model once at start-up; stop with a clear message if one is missing."""
+    """Load every model once at start-up and score all customers for the dashboard."""
     app.state.service = PredictionService()
+    app.state.portfolio = Portfolio(app.state.service)
     yield
 
 
@@ -48,7 +50,7 @@ def create_app() -> FastAPI:
     async def _invalid_features(_: Request, exc: InvalidFeatures) -> JSONResponse:
         return JSONResponse(status_code=422, content={"detail": str(exc)})
 
-    for module in (health, predict, customers, explain):
+    for module in (health, predict, customers, explain, portfolio):
         app.include_router(module.router)
     return app
 
